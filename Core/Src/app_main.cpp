@@ -14,6 +14,7 @@ extern "C" UART_HandleTypeDef huart2;
 extern "C" DMA_HandleTypeDef hdma_usart2_rx;
 extern "C" DMA_HandleTypeDef hdma_usart2_tx;
 extern "C" IWDG_HandleTypeDef hiwdg;
+extern "C" CRC_HandleTypeDef hcrc;
 
 struct Led {
 	GPIO_TypeDef *port;
@@ -99,172 +100,10 @@ Bytes publishMessage(const char* topic, uint64_t i) {
 
 #define CBOR
 #ifdef CBOR
-#include <cbor.h>
-
-class CborWriter {
-	std::vector<CborEncoder*> _encoders;
-	CborEncoder *_encoder;
-	std::vector<uint8_t> _data;
-	CborError _error;
-public:
-	CborWriter(size_t sz) {
-		_data.resize(sz);
-		_encoder = new CborEncoder;
-	}
-	CborWriter& reset() {
-		while (_encoders.size()) {
-			delete _encoders.back();
-			_encoders.pop_back();
-		}
-		cbor_encoder_init(_encoder, _data.data(), _data.capacity(), 0);
-		return *this;
-	}
-	CborWriter& array() {
-		CborEncoder *arrayEncoder = new CborEncoder;
-		_error = cbor_encoder_create_array(_encoder, arrayEncoder,
-				CborIndefiniteLength);
-		_encoders.push_back(_encoder);
-		_encoder = arrayEncoder;
-		return *this;
-	}
-	CborWriter& map() {
-		CborEncoder *mapEncoder = new CborEncoder;
-		_error = cbor_encoder_create_map(_encoder, mapEncoder,
-				CborIndefiniteLength);
-		_encoders.push_back(_encoder);
-		_encoder = mapEncoder;
-		return *this;
-	}
-	CborWriter& close() {
-		if (_error == CborNoError) {
-			if (_encoders.size() > 0) {
-				CborEncoder *rootEncoder = _encoders.back();
-				_error = cbor_encoder_close_container(rootEncoder, _encoder);
-				delete _encoder;
-				_encoder = rootEncoder;
-				_encoders.pop_back();
-			} else {
-				_error = CborUnknownError;
-			}
-		}
-		return *this;
-	}
-	Bytes bytes() {
-		if (_error == CborNoError && _encoders.size() == 0) {
-			size_t sz = cbor_encoder_get_buffer_size(_encoder, _data.data());
-			_data.resize(sz);
-			return _data;
-		}
-		_data.clear();
-		return _data;
-	}
-	CborError error() {
-		return _error;
-	}
-	CborWriter& add(uint64_t v) {
-		if (_error == CborNoError) {
-			_error = cbor_encode_int(_encoder, v);
-		}
-		return *this;
-	}
-	CborWriter& add(const char *v) {
-		if (_error == CborNoError) {
-			_error = cbor_encode_text_string(_encoder, v, strlen(v));
-		}
-		return *this;
-	}
-	bool ok() {
-		return _error == CborNoError;
-	}
-};
-class CborReader {
-	uint8_t *_data;
-	size_t _sz;
-	CborValue *_value;
-	CborError _error;
-	CborParser _parser;
-	std::vector<CborValue*> _containers;
-public:
-	CborReader(size_t sz) :
-			_sz(sz) {
-		_data = new uint8_t[sz];
-		_value = new CborValue;
-	}
-	~CborReader() {
-		delete _data;
-	}
-	CborReader& parse(uint8_t *buffer, size_t length) {
-		while (_containers.size()) {
-			delete _value;
-			_value = _containers.back();
-			_containers.pop_back();
-		}
-		_error = cbor_parser_init(buffer, length, 0, &_parser, _value);
-		return *this;
-	}
-	CborReader& parse(Bytes &bs) {
-
-		return parse(bs.data(), bs.size());
-	}
-	CborReader& array() {
-		assert(_error == CborNoError);
-		if (cbor_value_is_container(_value)) {
-			CborValue *arrayValue = new CborValue;
-			_error = cbor_value_enter_container(_value, arrayValue);
-			_containers.push_back(_value);
-			_value = arrayValue;
-		} else {
-			_error = CborErrorIllegalType;
-		}
-		return *this;
-	}
-	CborReader& end() {
-		if (_error == CborNoError && _containers.size() > 0) {
-			CborValue *it = _containers.back();
-			_error = cbor_value_leave_container(it, _value);
-			delete _value;
-			_value = it;
-			_containers.pop_back();
-		}
-		return *this;
-	}
-	CborReader& get(uint64_t &v) {
-		if (_error == CborNoError)
-			_error = cbor_value_get_uint64(_value, &v);
-		return *this;
-	}
-	CborReader& get(int64_t &v) {
-		if (_error == CborNoError)
-			_error = cbor_value_get_int64(_value, &v);
-		return *this;
-	}
-	CborReader& get(int &v) {
-		if (_error == CborNoError)
-			_error = cbor_value_get_int(_value, &v);
-		return *this;
-	}
-	CborReader& get(std::string &s) {
-		if (_error == CborNoError) {
-			if (cbor_value_is_text_string(_value)) {
-				size_t length;
-				_error = cbor_value_calculate_string_length(_value, &length);
-				char *temp;
-				size_t size;
-				_error = cbor_value_dup_text_string(_value, &temp, &size, 0);
-				assert(_error == CborNoError);
-				s = temp;
-				::free(temp);
-				if (!_error)
-					_error = cbor_value_advance(_value);
-			} else {
-				_error = CborErrorIllegalType;
-			}
-		}
-		return *this;
-	}
-	bool ok(){ return _error==CborNoError; }
-};
-CborWriter tx(100);
+#include "CborWriter.h"
+#include "CborReader.h"
+#include "frame.h"
+CborWriter tx(200);
 CborReader rx(100);
 
 Bytes nodeMessage(const char *name) {
@@ -272,25 +111,42 @@ Bytes nodeMessage(const char *name) {
 		Bytes payload = tx.bytes();
 		std::string nme;
 		int i;
-		rx.parse(payload).array().get(i).get(nme).end().ok();
+		rx.parse(payload).array().get(i).get(nme).close().ok();
+		assert(i == B_NODE);
+		assert(strcmp(nme.c_str(), name) == 0);
+		tx.addCrc();
 		return tx.bytes();
 	} else
 		return Bytes();
 }
 
-Bytes publishMessage(const char *topic, uint64_t i) {
-	if (tx.reset().array().add(B_PUBLISH).add(topic).add(i).close().ok())
+Bytes publishMessage(const char *topic, uint64_t v) {
+	if (tx.reset().array().add(B_PUBLISH).add(topic).add(v).close().ok()) {
+		Bytes payload = tx.bytes();
+		std::string nme;
+		int i;
+		uint64_t u;
+		rx.parse(payload).array().get(i).get(nme).get(u).close().ok();
+		assert(i == B_PUBLISH);
+		assert(strcmp(nme.c_str(), topic) == 0);
+		assert(v == u);
+		tx.addCrc();
 		return tx.bytes();
-	else
+	} else
 		return Bytes();
 }
 #endif
+static volatile bool crcDMAdone;
+
+void DMADoneCallback(DMA_HandleTypeDef *handle) {
+	crcDMAdone = true;
+}
 
 void taskBlinker(void *argument) {
 	Led yellow = { GPIOB, GPIO_PIN_1 };
-	static uint32_t cnt = 0;
 	log("Build %s : %s \r\n", __DATE__, __TIME__);
 
+	static uint32_t cnt = 0;
 	for (;;) {
 		if (cnt % 100 == 0)
 			yellow.toggle();
@@ -299,11 +155,11 @@ void taskBlinker(void *argument) {
 				Log::txBufferOverflow);
 
 		vTaskDelay(5);
-		Bytes framed = nodeMessage("stm32f103");
+		Bytes framed = frame(nodeMessage("stm32f103"));
 		if (HAL_UART_Transmit_DMA(&huart2, framed.data(), framed.size())
 				!= HAL_OK)
 			Log::txBufferOverflow++;
-		framed = publishMessage("src/stm32f103/system/uptime", Sys::millis());
+		framed = frame(publishMessage("src/stm32f103/system/uptime", Sys::millis()));
 		vTaskDelay(5);
 		if (HAL_UART_Transmit_DMA(&huart2, framed.data(), framed.size())
 				!= HAL_OK)
@@ -312,7 +168,7 @@ void taskBlinker(void *argument) {
 }
 
 extern "C" void app_main() {
-	xTaskCreate(taskBlinker, "blinker", 256, NULL, 1, NULL);
+	xTaskCreate(taskBlinker, "blinker", 128, NULL, 1, NULL);
 //	xPortStartScheduler();
 	osKernelStart();
 }

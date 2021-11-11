@@ -260,6 +260,7 @@ static void MX_CRC_Init(void)
 {
 
   /* USER CODE BEGIN CRC_Init 0 */
+    __CRC_CLK_ENABLE();
 
   /* USER CODE END CRC_Init 0 */
 

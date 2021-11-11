@@ -13,6 +13,6 @@ typedef std::vector<uint8_t> Bytes;
 #define PPP_ESC_CHAR 0x7D
 #define PPP_FLAG_CHAR 0x7E
 
-Bytes ppp_frame(const Bytes &in);
-bool ppp_deframe(Bytes &out, const Bytes &in);
+Bytes frame(const Bytes &in);
+bool deframe(Bytes &out, const Bytes &in);
 #endif
