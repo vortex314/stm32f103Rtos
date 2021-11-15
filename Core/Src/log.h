@@ -10,12 +10,13 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <string>
-#include "sys.h"
+
+#include "Sys.h"
 
 const char* tfl(const char *file, const uint32_t line) ;
 void log(const char *format, ...) ;
-#define INFO(fmt, ...) log(TFL);log(fmt,##__VA_ARGS__);log("\r\n")
-#define WARN(fmt, ...) log(TFL);log(fmt,##__VA_ARGS__);log("\r\n")
+#define INFO(fmt, ...) {log(TFL);log(fmt,##__VA_ARGS__);log("\r\n");}
+#define WARN(fmt, ...) {log(TFL);log(fmt,##__VA_ARGS__);log("\r\n");}
 
 using cstr = const char* const;
 

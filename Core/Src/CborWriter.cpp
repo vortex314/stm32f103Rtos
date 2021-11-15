@@ -74,7 +74,21 @@ CborWriter& CborWriter::add(uint64_t v) {
 	return *this;
 }
 
+CborWriter& CborWriter::add(double v) {
+	if (_error == CborNoError) {
+		_error = cbor_encode_double(_encoder, v);
+	}
+	return *this;
+}
+
 CborWriter& CborWriter::add(int v) {
+	if (_error == CborNoError) {
+		_error = cbor_encode_int(_encoder, v);
+	}
+	return *this;
+}
+
+CborWriter& CborWriter::add(uint32_t v) {
 	if (_error == CborNoError) {
 		_error = cbor_encode_int(_encoder, v);
 	}

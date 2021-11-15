@@ -4,9 +4,11 @@
 #include <deque>
 #include <vector>
 #include <stdarg.h>
-#include "sys.h"
 #include "log.h"
 #include "frame.h"
+#include "limero.h"
+#include "Sys.h"
+#include <task.h>
 
 extern "C" I2C_HandleTypeDef hi2c1;
 extern "C" TIM_HandleTypeDef htim2;
@@ -17,11 +19,11 @@ extern "C" IWDG_HandleTypeDef hiwdg;
 extern "C" CRC_HandleTypeDef hcrc;
 
 struct Led {
-	GPIO_TypeDef *port;
-	uint32_t pin;
-	void toggle() {
-		HAL_GPIO_TogglePin(port, pin);
-	}
+		GPIO_TypeDef *port;
+		uint32_t pin;
+		void toggle() {
+			HAL_GPIO_TogglePin(port, pin);
+		}
 };
 
 //================================================ UART
@@ -106,35 +108,28 @@ Bytes publishMessage(const char* topic, uint64_t i) {
 CborWriter tx(200);
 CborReader rx(100);
 
-Bytes nodeMessage(const char *name) {
-	if (tx.reset().array().add(B_NODE).add(name).close().ok()) {
-		Bytes payload = tx.bytes();
-		std::string nme;
-		int i;
-		rx.parse(payload).array().get(i).get(nme).close().ok();
-		assert(i == B_NODE);
-		assert(strcmp(nme.c_str(), name) == 0);
+
+
+void sendNode(const char *topic) {
+	if (tx.reset().array().add(B_NODE).add(topic).close().ok()) {
 		tx.addCrc();
-		return tx.bytes();
-	} else
-		return Bytes();
+		Bytes buffer = frame(tx.bytes());
+		if (HAL_UART_Transmit_DMA(&huart2, buffer.data(), buffer.size())
+				!= HAL_OK) Log::txBufferOverflow++;
+	}
 }
 
-Bytes publishMessage(const char *topic, uint64_t v) {
+
+template < typename T>
+void publish(const char *topic, T v) {
 	if (tx.reset().array().add(B_PUBLISH).add(topic).add(v).close().ok()) {
-		Bytes payload = tx.bytes();
-		std::string nme;
-		int i;
-		uint64_t u;
-		rx.parse(payload).array().get(i).get(nme).get(u).close().ok();
-		assert(i == B_PUBLISH);
-		assert(strcmp(nme.c_str(), topic) == 0);
-		assert(v == u);
 		tx.addCrc();
-		return tx.bytes();
-	} else
-		return Bytes();
+		Bytes buffer = frame(tx.bytes());
+		if (HAL_UART_Transmit_DMA(&huart2, buffer.data(), buffer.size())
+				!= HAL_OK) Log::txBufferOverflow++;
+	}
 }
+
 #endif
 static volatile bool crcDMAdone;
 
@@ -142,33 +137,61 @@ void DMADoneCallback(DMA_HandleTypeDef *handle) {
 	crcDMAdone = true;
 }
 
-void taskBlinker(void *argument) {
-	Led yellow = { GPIOB, GPIO_PIN_1 };
-	log("Build %s : %s \r\n", __DATE__, __TIME__);
+Thread workerThread("worker");
+Thread spineThread("spine");
 
-	static uint32_t cnt = 0;
-	for (;;) {
-		if (cnt % 100 == 0)
-			yellow.toggle();
-		vTaskDelay(1);
-		log("%s %lu : %lu : Hello world, here I am !!!\r\n", TFL, cnt++,
-				Log::txBufferOverflow);
+class Blinker : public Actor {
+		TimerSource ticker;
+		Led yellow = { GPIOB, GPIO_PIN_1 };
 
-		vTaskDelay(5);
-		Bytes framed = frame(nodeMessage("stm32f103"));
-		if (HAL_UART_Transmit_DMA(&huart2, framed.data(), framed.size())
-				!= HAL_OK)
-			Log::txBufferOverflow++;
-		framed = frame(publishMessage("src/stm32f103/system/uptime", Sys::millis()));
-		vTaskDelay(5);
-		if (HAL_UART_Transmit_DMA(&huart2, framed.data(), framed.size())
-				!= HAL_OK)
-			Log::txBufferOverflow++;
-	}
-}
+	public:
+		Blinker(Thread& thr):Actor(thr),ticker(thr,100,true,"ticker") {
+			ticker >> [&](const TimerMsg& ){
+				yellow.toggle();
+			};
+		}
+} blinker(workerThread);
+
+class Spine : public Actor {
+		TimerSource ticker;
+		uint32_t count=0;
+	public :
+		Spine(Thread& thread) :Actor(thread),ticker(thread,100,true,"ticker"){
+			INFO("Build %s : %s", __DATE__, __TIME__);
+
+			ticker >> [&](const TimerMsg& ){
+				count++;
+				switch (count%5) {
+					case 0 : {
+						sendNode("stm32f103");
+						break;
+					}
+					case 1 : {
+						publish("src/stm32f103/system/uptime", Sys::millis());
+						break;
+					}
+					case 2 : {
+						publish("dst/stm32f103/system/loopback",Sys::millis());
+						break;
+					}
+					case 3 : {
+						publish("src/stm32f103/system/highWaterMark",uxTaskGetStackHighWaterMark( NULL ));
+						break;
+					}
+					case 4 : {
+						publish("src/stm32f103/system/build",__DATE__ " " __TIME__);
+						break;
+					}
+				}
+			};
+		}
+
+} spine(spineThread);
+
 
 extern "C" void app_main() {
-	xTaskCreate(taskBlinker, "blinker", 128, NULL, 1, NULL);
+	workerThread.start();
+	spineThread.start();
 //	xPortStartScheduler();
 	osKernelStart();
 }

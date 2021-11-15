@@ -4,8 +4,8 @@
  *  Created on: Nov 7, 2021
  *      Author: lieven
  */
-#include "sys.h"
 #include "stm32f1xx_hal.h"
+#include "Sys.h"
 
 uint64_t Sys::_millis=0;
 
