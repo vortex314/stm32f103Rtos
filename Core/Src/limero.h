@@ -227,7 +227,7 @@ class ArrayQueue : public AbstractQueue<T> {
 
 #include <atomic>
 #include <cstdint>
-
+#define STM32_OPENCM3
 #if defined(STM32_OPENCM3)
 #define INDEX_TYPE uint32_t
 template <typename T, size_t cache_line_size = 32>
@@ -625,6 +625,16 @@ class QueueFlow : public Flow<T, T>, public Invoker, public Named {
     if (_thread) {
       if (_queue.push(t))
         _thread->enqueue(this);
+      else
+        WARN("QueueFlow '%s' push failed", name());
+    } else {
+      this->emit(t);
+    }
+  }
+  void onIsr(const T &t) {
+    if (_thread) {
+      if (_queue.push(t))
+        _thread->enqueueFromIsr(this);
       else
         WARN("QueueFlow '%s' push failed", name());
     } else {

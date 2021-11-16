@@ -23,7 +23,7 @@ void log(const char *format, ...) {
 		n = vsnprintf(Log::_buffer, sizeof(Log::_buffer), format, args);
 		va_end(args);
 		Log::_buffer[n] = '\0';
-		HAL_UART_Transmit_DMA(&huart2, (uint8_t*) Log::_buffer, n);
+		while( HAL_UART_Transmit_DMA(&huart2, (uint8_t*) Log::_buffer, n) != HAL_OK );
 	} else
 		Log::txBufferOverflow++;
 }
