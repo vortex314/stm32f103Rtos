@@ -38,7 +38,7 @@ void Thread::createQueue() {
 void Thread::start() {
 	auto x = xTaskCreate([](void *task) {
 		((Thread*) task)->run();
-	}, name(), _stackSize ? _stackSize : 256, this, _priority, NULL);
+	}, name(), _stackSize ? _stackSize : 128, this, _priority, NULL);
 	if (x != pdPASS) WARN("xTaskCreate() : %d ", x);
 }
 
@@ -90,6 +90,8 @@ void Thread::run() {
 			Invoker *prq;
 			TickType_t tickWaits = pdMS_TO_TICKS(waitTime);
 			if (tickWaits == 0) noWaits++;
+			if ( tickWaits > 2000 )
+				log("%s %d \r\n",TFL,tickWaits);
 			if (xQueueReceive(_workQueue, &prq, tickWaits) == pdPASS) {
 				uint64_t start = Sys::millis();
 				prq->invoke();

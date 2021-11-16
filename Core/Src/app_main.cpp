@@ -50,8 +50,6 @@ uint8_t rxBuffer[100];
 
 // https://stackoverflow.com/questions/43298708/stm32-implementing-uart-in-dma-mode
 
-
-
 #define FRAME_MAX 100
 Thread spineThread("spine");
 class Uart: public Actor {
@@ -122,8 +120,7 @@ class Uart: public Actor {
 		uint32_t errors() {
 			return _txdOverflow;
 		}
-} uart2(spineThread,&huart2);
-
+} uart2(spineThread, &huart2);
 
 typedef void (*RxdFunction)(Bytes&);
 
@@ -137,21 +134,22 @@ extern "C" void UART_IDLECallback(UART_HandleTypeDef *huart) {
 	HAL_UART_Receive_DMA(huart, rxBuffer, sizeof(rxBuffer)); // next rxd cycle
 }
 /*
-extern "C" void USART2_IRQHandler(void) {
-	if (__HAL_UART_GET_FLAG(&huart2, UART_FLAG_IDLE) != RESET) {
-		__HAL_UART_CLEAR_IDLEFLAG(&huart2);
-		UART_IDLECallback(&huart2);
-	}
-	HAL_UART_IRQHandler(&huart2);
-}
-*/
+ extern "C" void USART2_IRQHandler(void) {
+ if (__HAL_UART_GET_FLAG(&huart2, UART_FLAG_IDLE) != RESET) {
+ __HAL_UART_CLEAR_IDLEFLAG(&huart2);
+ UART_IDLECallback(&huart2);
+ }
+ HAL_UART_IRQHandler(&huart2);
+ }
+ */
 extern "C" void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 	uart2.UART_Data_Process(huart);
 	HAL_UART_Receive_DMA(huart, rxBuffer, sizeof(rxBuffer)); // next rxd cycle
 }
 
 extern "C" void HAL_UART_RxHalfCpltCallback(UART_HandleTypeDef *huart) {
-//	uart2.UART_Data_Process(huart);
+	uart2.UART_Data_Process(huart);
+	HAL_UART_Receive_DMA(huart, rxBuffer, sizeof(rxBuffer)); // next rxd cycle
 }
 
 void sendNode(const char *topic) {
@@ -203,7 +201,8 @@ class Spine: public Actor {
 	public:
 		Spine(Thread &thread)
 				:
-				Actor(thread), ticker(thread, 100, true, "ticker") {
+				Actor(thread), ticker(thread, 100, true, "ticker") {}
+		void init(){
 			log("%s Build %s : %s \r\n", TFL, __DATE__, __TIME__);
 
 			ticker
@@ -233,14 +232,14 @@ class Spine: public Actor {
 						}
 					};
 		}
-};
+} spine(spineThread);
 
 extern "C" void app_main() {
-	Spine spine(spineThread);
 	uart2.init();
-	uart2.incoming() >> [&](const Bytes& bs){
-		log("%s bytes rxd : %d \r\n",TFL,bs.size());
+	uart2.incoming() >> [&](const Bytes &bs) {
+		log("%s bytes rxd : %d \r\n", TFL, bs.size());
 	};
+	spine.init();
 	workerThread.start();
 	spineThread.start();
 	//	xPortStartScheduler();
