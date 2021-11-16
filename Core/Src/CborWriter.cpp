@@ -67,6 +67,13 @@ Bytes CborWriter::bytes() {
 CborError CborWriter::error() {
 	return _error;
 }
+
+CborWriter& CborWriter::add(bool v) {
+	if (_error == CborNoError) {
+		_error = cbor_encode_boolean(_encoder, v);
+	}
+	return *this;
+}
 CborWriter& CborWriter::add(uint64_t v) {
 	if (_error == CborNoError) {
 		_error = cbor_encode_uint(_encoder, v);
@@ -98,6 +105,13 @@ CborWriter& CborWriter::add(uint32_t v) {
 CborWriter& CborWriter::add(const char *v) {
 	if (_error == CborNoError) {
 		_error = cbor_encode_text_string(_encoder, v, strlen(v));
+	}
+	return *this;
+}
+
+CborWriter& CborWriter::add(const std::string& v) {
+	if (_error == CborNoError) {
+		_error = cbor_encode_text_string(_encoder, v.data(), v.length());
 	}
 	return *this;
 }

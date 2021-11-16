@@ -12,6 +12,8 @@ int Thread::_id = 0;
 
 Thread::Thread(const char *name) : Named(name) {
   _priority = tskIDLE_PRIORITY + 1;
+  _stackSize = 200;
+  _queueSize=20;
 }
 
 Thread::Thread(ThreadProperties props)

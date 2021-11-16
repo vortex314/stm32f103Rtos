@@ -9,6 +9,7 @@
 #include "limero.h"
 #include "Sys.h"
 #include <task.h>
+#include <deque>
 
 extern "C" I2C_HandleTypeDef hi2c1;
 extern "C" TIM_HandleTypeDef htim2;
@@ -106,9 +107,8 @@ Bytes publishMessage(const char* topic, uint64_t i) {
 #include "CborReader.h"
 #include "frame.h"
 CborWriter tx(200);
-CborReader rx(100);
-
-
+CborReader rx(10);
+uint8_t rxBuffer[100];
 
 void sendNode(const char *topic) {
 	if (tx.reset().array().add(B_NODE).add(topic).close().ok()) {
@@ -119,8 +119,7 @@ void sendNode(const char *topic) {
 	}
 }
 
-
-template < typename T>
+template<typename T>
 void publish(const char *topic, T v) {
 	if (tx.reset().array().add(B_PUBLISH).add(topic).add(v).close().ok()) {
 		tx.addCrc();
@@ -140,56 +139,113 @@ void DMADoneCallback(DMA_HandleTypeDef *handle) {
 Thread workerThread("worker");
 Thread spineThread("spine");
 
-class Blinker : public Actor {
+class Blinker: public Actor {
 		TimerSource ticker;
 		Led yellow = { GPIOB, GPIO_PIN_1 };
+		uint32_t cnt = 0;
 
 	public:
-		Blinker(Thread& thr):Actor(thr),ticker(thr,100,true,"ticker") {
-			ticker >> [&](const TimerMsg& ){
+		Blinker(Thread &thr)
+				:
+				Actor(thr), ticker(thr, 100, true, "ticker") {
+			ticker >> [&](const TimerMsg&) {
 				yellow.toggle();
 			};
 		}
 } blinker(workerThread);
 
-class Spine : public Actor {
-		TimerSource ticker;
-		uint32_t count=0;
-	public :
-		Spine(Thread& thread) :Actor(thread),ticker(thread,100,true,"ticker"){
-			INFO("Build %s : %s", __DATE__, __TIME__);
+uint32_t wrPtr;
+uint32_t rdPtr;
+size_t rcvdLen;
+uint8_t RxBuf3[100];
+#define MAX_RX_BUF 70
+#include "CircBuf.h"
+CircBuf rxd(100);
 
-			ticker >> [&](const TimerMsg& ){
-				count++;
-				switch (count%5) {
-					case 0 : {
-						sendNode("stm32f103");
-						break;
-					}
-					case 1 : {
-						publish("src/stm32f103/system/uptime", Sys::millis());
-						break;
-					}
-					case 2 : {
-						publish("dst/stm32f103/system/loopback",Sys::millis());
-						break;
-					}
-					case 3 : {
-						publish("src/stm32f103/system/highWaterMark",uxTaskGetStackHighWaterMark( NULL ));
-						break;
-					}
-					case 4 : {
-						publish("src/stm32f103/system/build",__DATE__ " " __TIME__);
-						break;
-					}
-				}
-			};
+void UART_Data_Process(UART_HandleTypeDef *huart) {
+	wrPtr = sizeof(rxBuffer) - huart->hdmarx->Instance->CNDTR;
+	if (wrPtr != rdPtr) {
+		memset(RxBuf3, 0, MAX_RX_BUF + 16);
+
+		if (wrPtr > rdPtr) {
+			rcvdLen = wrPtr - rdPtr;
+			memcpy(RxBuf3, rxBuffer + rdPtr, rcvdLen);
+		} else {
+			rcvdLen = sizeof(rxBuffer) - rdPtr;
+			memcpy(RxBuf3, rxBuffer + rdPtr, rcvdLen);
+			if (wrPtr > 0) {
+				rcvdLen += wrPtr;
+				memcpy(RxBuf3 + rcvdLen, rxBuffer, wrPtr);
+			}
+		}
+		rdPtr = wrPtr;
+	}
+}
+
+void UART_IDLECallback(UART_HandleTypeDef *huart) {
+	__NOP();
+}
+
+void USART2_IRQHandler(void) {
+	if (__HAL_UART_GET_FLAG(&huart2, UART_FLAG_IDLE) != RESET) {
+		__HAL_UART_CLEAR_IDLEFLAG(&huart2);
+		UART_IDLECallback(&huart2);
+	}
+	HAL_UART_IRQHandler(&huart2);
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+	__NOP();
+}
+
+void HAL_UART_RxHalfCpltCallback(UART_HandleTypeDef *huart) {
+	__NOP();
+}
+
+class Spine: public Actor {
+		TimerSource ticker;
+		uint32_t count = 0;
+	public:
+		Spine(Thread &thread)
+				:
+				Actor(thread), ticker(thread, 100, true, "ticker") {
+			INFO("Build %s : %s", __DATE__, __TIME__);
+			__HAL_UART_ENABLE_IT(&huart2, UART_IT_IDLE);
+
+			ticker
+					>> [&](const TimerMsg&) {
+						HAL_UART_Receive_DMA(&huart2, rxBuffer, sizeof(rxBuffer));
+
+						count++;
+						switch (count % 5) {
+							case 0: {
+								sendNode("stm32f103");
+								break;
+							}
+							case 1: {
+								publish("src/stm32f103/system/uptime", Sys::millis());
+								break;
+							}
+							case 2: {
+								publish("dst/stm32f103/system/loopback", Sys::millis());
+								break;
+							}
+							case 3: {
+								publish("src/stm32f103/system/highWaterMark", uxTaskGetStackHighWaterMark( NULL));
+								break;
+							}
+							case 4: {
+								publish("src/stm32f103/system/build", __DATE__ " " __TIME__);
+								break;
+							}
+						}
+					};
 		}
 
-} spine(spineThread);
-
+};
 
 extern "C" void app_main() {
+	Spine spine(spineThread);
 	workerThread.start();
 	spineThread.start();
 //	xPortStartScheduler();

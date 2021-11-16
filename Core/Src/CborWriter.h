@@ -11,6 +11,7 @@
 #include <cbor.h>
 #include <vector>
 #include <stdint.h>
+#include <string>
 
 typedef std::vector<uint8_t> Bytes;
 
@@ -31,11 +32,13 @@ public:
 	Bytes bytes();
 	CborError error();
 	CborWriter& add(const char *v) ;
+	CborWriter& add(const std::string&);
 	CborWriter& add(int);
 	CborWriter& add(uint32_t);
 	CborWriter& add(uint64_t);
 	CborWriter& add(int64_t);
 	CborWriter& add(double d);
+	CborWriter& add(bool);
 	CborWriter& addCrc();
 	bool ok() ;
 };
