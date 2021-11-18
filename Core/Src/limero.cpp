@@ -67,7 +67,7 @@ int Thread::enqueueFromIsr(Invoker *invoker) {
 
 
 void Thread::run() {
-	log("%s Thread '%s' prio : %d started \r\n", TFL, name(), uxTaskPriorityGet(NULL));
+	INFO("Thread '%s' prio : %d started",  name(), uxTaskPriorityGet(NULL));
 	createQueue();
 	uint32_t noWaits = 0;
 	while (true) {
@@ -91,7 +91,7 @@ void Thread::run() {
 			TickType_t tickWaits = pdMS_TO_TICKS(waitTime);
 			if (tickWaits == 0) noWaits++;
 			if ( tickWaits > 2000 )
-				log("%s %d \r\n",TFL,tickWaits);
+				INFO("%d",tickWaits);
 			if (xQueueReceive(_workQueue, &prq, tickWaits) == pdPASS) {
 				uint64_t start = Sys::millis();
 				prq->invoke();

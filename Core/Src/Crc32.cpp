@@ -41,11 +41,7 @@ extern "C" CRC_HandleTypeDef hcrc;
 uint32_t Crc32::bufferCrc(uint32_t *in_buf, size_t in_buf_length) {
     __CRC_CLK_ENABLE();
     uint32_t result = HAL_CRC_Calculate(&hcrc, in_buf, in_buf_length);
-//    log("%s HW CRC32 0x%X\r\n",TFL,result);
-//    vTaskDelay(1);
-//    log("%s SW CRC32 0x%X\r\n",TFL,crcSoft(in_buf, in_buf_length));
     __HAL_RCC_CRC_CLK_DISABLE();
     return result;
-
 }
 

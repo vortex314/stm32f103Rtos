@@ -52,6 +52,10 @@ uint8_t rxBuffer[100];
 
 #define FRAME_MAX 100
 Thread spineThread("spine");
+typedef struct {
+		String topic;
+		Bytes payload;
+} PubMsg;
 class Uart: public Actor {
 		uint32_t _txdOverflow = 0;
 		UART_HandleTypeDef *_huart;
@@ -61,17 +65,52 @@ class Uart: public Actor {
 		QueueFlow<Bytes> _framesRxd;
 		size_t _wrPtr, _rdPtr;
 		SinkFunction<Bytes> _framesTxd;
+		CborReader _cborReader;
 
 	public:
+		ValueFlow<PubMsg> incomingPublish;
+
 		Uart(Thread &thread, UART_HandleTypeDef *huart)
 				:
 				Actor(thread), _huart(huart), _framesRxd(5), _framesTxd([&](
 						const Bytes &bs) {
 					sendFrame(bs);
-				}) {
+				}),_cborReader(100) {
 			_framesRxd.async(thread);
 			_rdPtr = 0;
 			_wrPtr = 0;
+			_framesRxd >> [&](const Bytes &bs) {
+				int msgType;
+				_cborReader.fill(bs);
+				if (_cborReader.checkCrc()) {
+					if (_cborReader.parse().array().get(msgType).ok()) {
+						switch (msgType) {
+							case B_PUBLISH: {
+								std::string topic;
+								if (_cborReader.get(topic).ok()) {
+									INFO("%s",topic.c_str());
+									incomingPublish.on({topic,bs});
+								}
+								break;
+							}
+							case B_SUBSCRIBE: {
+								std::string topic;
+								if (_cborReader.get(topic).ok()) {
+								};
+								break;
+							}
+							case B_NODE: {
+								break;
+							}
+						}
+					} else {
+						INFO("get msgType failed");
+					}
+					_cborReader.close();
+				} else {
+					INFO("crc failed [%d] : %s",bs.size(),bs.data());
+				}
+			};
 		}
 		bool init() {
 			__HAL_UART_ENABLE_IT(_huart, UART_IT_IDLE);
@@ -80,7 +119,7 @@ class Uart: public Actor {
 		}
 		void sendFrame(const Bytes &bs) {
 			Bytes buffer = frame(tx.bytes());
-			if (HAL_UART_Transmit_DMA(&huart2, buffer.data(), buffer.size())
+			while (HAL_UART_Transmit_DMA(&huart2, buffer.data(), buffer.size())
 					!= HAL_OK) _txdOverflow++;
 		}
 		void UART_Data_Process(UART_HandleTypeDef *huart) {
@@ -120,6 +159,7 @@ class Uart: public Actor {
 		uint32_t errors() {
 			return _txdOverflow;
 		}
+
 } uart2(spineThread, &huart2);
 
 typedef void (*RxdFunction)(Bytes&);
@@ -133,15 +173,7 @@ extern "C" void UART_IDLECallback(UART_HandleTypeDef *huart) {
 	uart2.UART_Data_Process(huart);
 	HAL_UART_Receive_DMA(huart, rxBuffer, sizeof(rxBuffer)); // next rxd cycle
 }
-/*
- extern "C" void USART2_IRQHandler(void) {
- if (__HAL_UART_GET_FLAG(&huart2, UART_FLAG_IDLE) != RESET) {
- __HAL_UART_CLEAR_IDLEFLAG(&huart2);
- UART_IDLECallback(&huart2);
- }
- HAL_UART_IRQHandler(&huart2);
- }
- */
+
 extern "C" void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 	uart2.UART_Data_Process(huart);
 	HAL_UART_Receive_DMA(huart, rxBuffer, sizeof(rxBuffer)); // next rxd cycle
@@ -151,6 +183,13 @@ extern "C" void HAL_UART_RxHalfCpltCallback(UART_HandleTypeDef *huart) {
 	uart2.UART_Data_Process(huart);
 	HAL_UART_Receive_DMA(huart, rxBuffer, sizeof(rxBuffer)); // next rxd cycle
 }
+
+static volatile bool crcDMAdone;
+
+void DMADoneCallback(DMA_HandleTypeDef *handle) {
+	crcDMAdone = true;
+}
+//================================= BROKER COMMANDS =========================================
 
 void sendNode(const char *topic) {
 	if (tx.reset().array().add(B_NODE).add(topic).close().addCrc().ok())
@@ -163,11 +202,7 @@ void publish(const char *topic, T v) {
 		uart2.outgoing().on(tx.bytes());
 }
 
-static volatile bool crcDMAdone;
-
-void DMADoneCallback(DMA_HandleTypeDef *handle) {
-	crcDMAdone = true;
-}
+//========================== BLINKER =======================================================
 
 Thread workerThread("worker");
 
@@ -186,13 +221,7 @@ class Blinker: public Actor {
 		}
 } blinker(workerThread);
 
-uint32_t wrPtr;
-uint32_t rdPtr;
-size_t rcvdLen;
-uint8_t RxBuf3[100];
-#define MAX_RX_BUF 70
-#include "CircBuf.h"
-CircBuf rxd(100);
+//================================= SPINE ==================================================
 
 class Spine: public Actor {
 		TimerSource ticker;
@@ -201,14 +230,16 @@ class Spine: public Actor {
 	public:
 		Spine(Thread &thread)
 				:
-				Actor(thread), ticker(thread, 100, true, "ticker") {}
-		void init(){
-			log("%s Build %s : %s \r\n", TFL, __DATE__, __TIME__);
+				Actor(thread), ticker(thread, 100, true, "ticker") {
+		}
+		void init() {
+			INFO("Build %s : %s",  __DATE__, __TIME__);
 
 			ticker
 					>> [&](const TimerMsg&) {
+				INFO("");
 						count++;
-						switch (count % 5) {
+						switch (count % 6) {
 							case 0: {
 								sendNode("stm32f103");
 								break;
@@ -229,6 +260,10 @@ class Spine: public Actor {
 								publish("src/stm32f103/system/build", __DATE__ " " __TIME__);
 								break;
 							}
+							case 5: {
+								publish("src/stm32f103/system/pi", 3.141592653);
+								break;
+							}
 						}
 					};
 		}
@@ -237,7 +272,10 @@ class Spine: public Actor {
 extern "C" void app_main() {
 	uart2.init();
 	uart2.incoming() >> [&](const Bytes &bs) {
-		log("%s bytes rxd : %d \r\n", TFL, bs.size());
+		INFO("bytes rxd : %d ", bs.size());
+	};
+	uart2.incomingPublish >> [&](const PubMsg& pm ){
+		INFO("incoming publish %s : [%d]",pm.topic.c_str(),pm.payload.size());
 	};
 	spine.init();
 	workerThread.start();

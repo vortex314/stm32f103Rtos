@@ -13,10 +13,7 @@
 
 #include "Sys.h"
 
-const char* tfl(const char *file, const uint32_t line) ;
-void log(const char *format, ...) ;
-#define INFO(fmt, ...) {log(TFL);log(fmt,##__VA_ARGS__);log("\r\n");}
-#define WARN(fmt, ...) {log(TFL);log(fmt,##__VA_ARGS__);log("\r\n");}
+
 
 using cstr = const char* const;
 
@@ -36,16 +33,25 @@ static constexpr cstr past_last_slash(cstr str) {
     constexpr cstr sf__{past_last_slash(__FILE__)}; \
     sf__;                                           \
   })
-
-#define TFL tfl(__SHORT_FILE__,__LINE__)
-
 class Log {
 public:
-	static uint32_t txBufferOverflow ;
-	static char _buffer[100];
-
+	 uint32_t txBufferOverflow ;
+	 char _buffer[100];
+	 size_t offset;
+	 Log& tfl(const char* ,const uint32_t );
+	 Log& printf(const char* fmt,...);
+	 void flush();
 private:
 };
+
+extern Log logger;
+
+#define INFO(fmt, ...) {logger.tfl(__SHORT_FILE__,__LINE__).printf(fmt,##__VA_ARGS__).flush();}
+#define WARN(fmt, ...) {logger.tfl(__SHORT_FILE__,__LINE__).printf(fmt,##__VA_ARGS__).flush();}
+
+
+
+
 
 
 #endif /* SRC_LOG_H_ */
