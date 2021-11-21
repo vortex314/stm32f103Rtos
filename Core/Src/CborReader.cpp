@@ -9,13 +9,20 @@
 #include "Crc32.h"
 #include "log.h"
 
-CborReader::CborReader(size_t capacity)
-		:
-		_capacity(capacity) {
-	_data = (uint8_t*) (new uint32_t[(capacity / 4) + 1]);
+CborReader::CborReader(size_t capacity) {
+	_data = 0;
+	_capacity=0;
+	_data = allocate(capacity);
 	_value = new CborValue;
 	_error = CborNoError;
 	_size = 0;
+}
+
+uint8_t*  CborReader::allocate(size_t capacity){
+	if ( _capacity > capacity ) return _data;
+	if ( _data ) delete _data;
+	_capacity = capacity;
+	return  (uint8_t*) (new uint32_t[(capacity / 4) + 1]);
 }
 
 CborReader::~CborReader() {
@@ -23,10 +30,7 @@ CborReader::~CborReader() {
 }
 
 CborReader& CborReader::fill(const uint8_t *data, size_t length) {
-	if (length > _capacity) {
-		_error = CborErrorDataTooLarge;
-		return *this;
-	}
+	_data = allocate(length);
 	for (size_t i = 0; i < length; i++) {
 		_data[i] = data[i];
 	}
@@ -35,7 +39,7 @@ CborReader& CborReader::fill(const uint8_t *data, size_t length) {
 	return *this;
 }
 
-CborReader& CborReader::parse() {
+CborReader& CborReader::parse()  {
 	while (_containers.size()) {
 		delete _value;
 		_value = _containers.back();
@@ -82,6 +86,16 @@ CborReader& CborReader::close() {
 CborReader& CborReader::get(uint64_t &v) {
 	if (_error == CborNoError) _error = cbor_value_get_uint64(_value, &v);
 	if (!_error) _error = cbor_value_advance(_value);
+	return *this;
+}
+
+CborReader& CborReader::get(uint32_t &ui) {
+	uint64_t v=0;
+	if (_error == CborNoError) _error = cbor_value_get_uint64(_value, &v);
+	if (!_error) {
+		ui = v;
+		_error = cbor_value_advance(_value);
+	}
 	return *this;
 }
 

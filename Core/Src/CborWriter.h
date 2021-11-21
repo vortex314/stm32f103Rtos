@@ -13,8 +13,7 @@
 #include <stdint.h>
 #include <string>
 
-typedef std::vector<uint8_t> Bytes;
-
+#include "Sys.h"
 class CborWriter {
 	std::vector<CborEncoder*> _encoders;
 	CborEncoder *_encoder;

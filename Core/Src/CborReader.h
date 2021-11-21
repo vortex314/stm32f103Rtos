@@ -22,16 +22,18 @@ class CborReader {
 	CborError _error;
 	CborParser _parser;
 	std::vector<CborValue*> _containers;
+	uint8_t* allocate(size_t );
 public:
-	CborReader(size_t sz) ;
+	CborReader(size_t sz=0) ;
 	CborReader& fill(const uint8_t *buffer, size_t length);
 	~CborReader();
-	CborReader& parse() ;
+	CborReader& parse()  ;
 	CborReader& fill(const Bytes &bs) ;
 	CborReader& array() ;
 	CborReader& close() ;
 	CborReader& get(uint64_t &v) ;
 	CborReader& get(int64_t &v);
+	CborReader& get(uint32_t &v);
 	CborReader& get(int &v) ;
 	CborReader& get(std::string &s) ;
 	CborReader& toJson(std::string& );

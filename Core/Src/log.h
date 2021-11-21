@@ -9,10 +9,7 @@
 #define SRC_LOG_H_
 #include <stdint.h>
 #include <stdarg.h>
-#include <string>
-
 #include "Sys.h"
-
 
 
 using cstr = const char* const;
@@ -38,6 +35,7 @@ public:
 	 uint32_t txBufferOverflow ;
 	 char _buffer[100];
 	 size_t offset;
+	 bool txBusy=false;
 	 Log& tfl(const char* ,const uint32_t );
 	 Log& printf(const char* fmt,...);
 	 void flush();
@@ -49,6 +47,7 @@ extern Log logger;
 #define INFO(fmt, ...) {logger.tfl(__SHORT_FILE__,__LINE__).printf(fmt,##__VA_ARGS__).flush();}
 #define WARN(fmt, ...) {logger.tfl(__SHORT_FILE__,__LINE__).printf(fmt,##__VA_ARGS__).flush();}
 
+std::string hexDump(Bytes bs, const char spacer=' ') ;
 
 
 

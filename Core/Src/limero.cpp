@@ -15,8 +15,8 @@ Thread::Thread(const char *name)
 		:
 		Named(name) {
 	_priority = tskIDLE_PRIORITY + 1;
-	_stackSize = 200;
-	_queueSize = 20;
+	_stackSize = 256;
+	_queueSize = 5;
 }
 
 Thread::Thread(ThreadProperties props)
@@ -30,15 +30,14 @@ void Thread::addTimer(TimerSource *ts) {
 }
 
 void Thread::createQueue() {
-	_workQueue = xQueueCreate(_queueSize ? _queueSize : 20, sizeof(Invoker*));
-	if (_workQueue == NULL)
-	WARN("Queue creation failed ");
+	_workQueue = xQueueCreate(_queueSize ? _queueSize : 5, sizeof(Invoker*));
+	if (_workQueue == NULL) WARN("Queue creation failed ");
 }
 
 void Thread::start() {
 	auto x = xTaskCreate([](void *task) {
 		((Thread*) task)->run();
-	}, name(), _stackSize ? _stackSize : 128, this, _priority, NULL);
+	}, name(), _stackSize ? _stackSize : 256, this, _priority, NULL);
 	if (x != pdPASS) WARN("xTaskCreate() : %d ", x);
 }
 
@@ -65,9 +64,8 @@ int Thread::enqueueFromIsr(Invoker *invoker) {
 	return 0;
 }
 
-
 void Thread::run() {
-	INFO("Thread '%s' prio : %d started",  name(), uxTaskPriorityGet(NULL));
+	INFO("Thread '%s' prio : %d started", name(), uxTaskPriorityGet(NULL));
 	createQueue();
 	uint32_t noWaits = 0;
 	while (true) {
@@ -90,8 +88,8 @@ void Thread::run() {
 			Invoker *prq;
 			TickType_t tickWaits = pdMS_TO_TICKS(waitTime);
 			if (tickWaits == 0) noWaits++;
-			if ( tickWaits > 2000 )
-				INFO("%d",tickWaits);
+			if (tickWaits > 2000)
+			INFO("%d", tickWaits);
 			if (xQueueReceive(_workQueue, &prq, tickWaits) == pdPASS) {
 				uint64_t start = Sys::millis();
 				prq->invoke();

@@ -869,7 +869,6 @@ class ValueFlow: public Flow<T, T>, public Invoker {
 		void invoke() {
 			this->emit(_t);
 		}
-		;
 		void async(Thread &thread) {
 			_thread = &thread;
 		}

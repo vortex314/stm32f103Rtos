@@ -8,8 +8,8 @@
 #include "Crc32.h"
 
 CborWriter::CborWriter(size_t sz) {
-	_capacity = sz;
 	_data = (uint8_t*) (new uint32_t[(sz / 4) + 1]);
+	_capacity = ((sz / 4) + 1)*4;
 	_encoder = new CborEncoder;
 	_error = CborNoError;
 	_withCrc = false;
