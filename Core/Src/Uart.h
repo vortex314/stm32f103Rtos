@@ -42,6 +42,6 @@ class Uart: public Actor {
 
 };
 
-void uartSendBytes(uint8_t*, size_t, int retries);
+extern "C" void uartSendBytes(uint8_t*, size_t, uint32_t retries);
 
 #endif /* SRC_UART_H_ */

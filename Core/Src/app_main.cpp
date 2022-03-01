@@ -2,10 +2,11 @@
 #include <deque>
 #include <vector>
 #include <stdarg.h>
-#include "log.h"
+#include "Log.h"
 #include "frame.h"
 #include "limero.h"
 #include "Sys.h"
+#include <FreeRTOS.h>
 #include <task.h>
 #include <deque>
 #include <memory.h>
@@ -21,6 +22,7 @@ LedBlinker blinker(workerThread, GPIOB, GPIO_PIN_1);
 Thread spineThread("spine");
 Uart uart2(spineThread, &huart2);
 Spine spine(spineThread);
+Log logger;
 
 extern "C" void app_main() {
 	INFO("Build %s : %s", __DATE__, __TIME__);
@@ -40,7 +42,7 @@ extern "C" void app_main() {
 		static uint32_t count = 0;
 		std::string topic;
 		uint32_t loopback;
-		int type;
+		int32_t type;
 		((CborReader&) reader).parse().array().get(type).get(topic).get(loopback).close();
 		INFO(" rx ovfl : %d  tx ovfl : %d count : %d ", uart2._rxdOverflow, uart2
 				._txdOverflow, count++);

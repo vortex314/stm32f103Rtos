@@ -29,6 +29,7 @@
 								</option>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.assembler.option.includepaths.1356466755" name="Include paths (-I)" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.assembler.option.includepaths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/stm32f103Rtos/etl/include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/components/inc}&quot;"/>
 									<listOptionValue builtIn="false" value="/home/lieven/workspace/ArduinoJson/src"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/stm32f103Rtos/cbor}&quot;"/>
 								</option>
