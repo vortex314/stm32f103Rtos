@@ -1,0 +1,25 @@
+{
+    "name": "tinycbor",
+    "version": "0.0.1",
+    "keywords": "stream",
+    "description": "TinyCbor",
+    "platforms": "ststm32",
+    "build": {
+        "libArchive": false,
+        "srcDir":"/home/lieven/workspace/tinycbor/src",
+        "includeDir":"/home/lieven/workspace/tinycbor/src",
+        "flags": [
+            "-I /home/lieven/workspace/components/inc",
+            "-I /home/lieven/workspace/tinycbor/src",
+            "-mcpu=cortex-m3",
+            "-mthumb",
+            "-fdata-sections",
+            "-ffunction-sections",
+            "-fno-exceptions",
+            "-DSTM32F103xB",
+            "-DSTM32",
+            "-Wall",
+            "-Os"
+        ]
+    }
+}

@@ -1,0 +1,27 @@
+{
+    "name": "Limero",
+    "version": "0.0.1",
+    "keywords": "stream",
+    "description": "Stream system",
+    "platforms": "ststm32",
+    "build": {
+        "libArchive": false,
+        "srcDir":"/home/lieven/workspace/components",
+        "srcFilter":["+<src/>","+<stm32/>"],
+        "includeDir":"/home/lieven/workspace/components/inc",
+        "flags": [
+            "-I /home/lieven/workspace/components/inc",
+            "-mcpu=cortex-m3",
+            "-mthumb",
+            "-fdata-sections",
+            "-ffunction-sections",
+            "-fno-exceptions",
+            "-DSTM32F103xB",
+            "-DSTM32",
+            "-Wall",
+            "-Os",
+            "-DSTM32_OPENCM3",
+            "-faligned-new"
+        ]
+    }
+}
